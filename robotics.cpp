@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <regex>
 
 #include "symbolicc++.h"
 
@@ -55,8 +56,6 @@ Transform::Transform(double theta, double d, double a, double alpha,
         (zero, sin(m_alpha), cos(m_alpha), m_d),
         (zero, zero, zero, one) );
 
-    std::cout << m_transform;
-
     switch(joint_type) {
         case REVOLUTE:
             m_transform = m_transform[zero == 0, one == 1,
@@ -74,8 +73,6 @@ Transform::Transform(double theta, double d, double a, double alpha,
             // TODO : throw
             break;
     }
-
-    std::cout << m_transform;
 }
 
 Transform::~Transform(){
@@ -108,8 +105,7 @@ public:
 
     Arm(std::vector<Transform> transforms);
     ~Arm();
-    void forward_kinematics(std::vector<double>);
-    void differential_kinematics(std::vector<double>);
+    void export_expressions();
 };
 
 Arm::Arm(std::vector<Transform> transforms){
@@ -127,27 +123,54 @@ Arm::Arm(std::vector<Transform> transforms){
         }
         m_forward_kinematics = m_forward_kinematics*T.m_transform;
     }
-    std::cout<< m_forward_kinematics;
 
     for (auto joint : m_actuated_joints) {
-        Symbolic diff_kin("d_dq");
+        //std::string name = std::string(name(joint));
+        Symbolic diff_kin("d_dq");//+name);
         diff_kin = df(m_forward_kinematics, joint);
         m_differential_kinematics.push_back(diff_kin);
     }
-
-    std::cout<< m_differential_kinematics[0];
-
-    Symbolic differential_3d("3d",m_differential_kinematics.size(),3);
-    int index = 0;
-    for (auto dq : m_differential_kinematics) {
-        differential_3d[index][0] = dq[0][3];
-        differential_3d[index][1] = dq[1][3];
-        differential_3d[index][2] = dq[2][3];
-    }
-    
 }
 
 Arm::~Arm(){
+}
+
+static void replace(std::string* in, std::string pattern, std::string replacement){
+    *in = std::regex_replace( *in, std::regex(pattern), replacement );
+}
+
+static std::string get_name(const Symbolic& symb){
+    std::string name;
+    std::ostringstream nstream;
+    nstream << symb;
+    name = nstream.str();
+    return name;
+}
+
+void Arm::export_expressions(){
+    std::string kin_str;
+    std::vector<std::string> dif_str;
+    std::ostringstream stream;
+    stream << m_forward_kinematics;
+    kin_str = stream.str();
+
+    for (int index = 0; index < m_actuated_joints.size(); index++) {
+        stream.str(std::string());
+        stream << m_differential_kinematics[index];
+        dif_str.push_back(stream.str());
+    }
+    for (auto joint : m_actuated_joints) {
+        std::string name = get_name(joint);
+
+        replace(&kin_str, "sin\\("+name+"\\)", "s_"+name);
+        replace(&kin_str, "cos\\("+name+"\\)", "c_"+name);
+        for (int index = 0; index < m_actuated_joints.size(); index++) {
+            replace(&dif_str[index], "sin\\("+name+"\\)", "s_"+name);
+            replace(&dif_str[index], "cos\\("+name+"\\)", "c_"+name);
+        }
+    }
+    //std::cout << kin_str;
+    std::cout << dif_str[0];
 }
 
 
@@ -155,10 +178,11 @@ int main (int argc, char* argv[]) {
     Transform T1(1,1,1,1,REVOLUTE,1);
     Transform T2(1,1,1,1,REVOLUTE,2);
     Transform T3(1,1,1,1,REVOLUTE,3);
-    std::vector<Transform> transforms = {T1, T2, T3};
+    std::vector<Transform> transforms = {T1, T2};
 
 
     Arm arm(transforms);
+    arm.export_expressions();
     return 0;
 }
 

@@ -9,10 +9,10 @@ import nelder_mead
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
+import sympy as sym
 
 # Note : The transform R->H is computed using DH tables, which then compute A matrices,
 #        then the resultant matrices are multiplied to get the FK result
-
 
 class Transform:
     def __init__(self, theta, d, a, alpha, q_i=0):
@@ -42,7 +42,6 @@ class Transform:
                    str(["s"+str(q_i), "c"+str(q_i)+"*"+str(cos(alpha)), "-c"+str(q_i)+"*"+str(sin(alpha)), str(a)+"*s"+str(q_i)]) + "\n" +
                    str(["0", str(sin(alpha)), str(cos(alpha)), str(d)]) + "\n" +
                    str(["0", "0", "0", "1"]) + "\n" )
-
 
 class Arm:
     def __init__(self, joints):
