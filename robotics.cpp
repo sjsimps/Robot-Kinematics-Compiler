@@ -10,6 +10,8 @@
 #define REVOLUTE 2
 #define STATIC 3
 
+///////////////////////////////////////////////////////////////////////////////
+
 class Transform {
 public:
     Symbolic m_theta, m_d, m_a, m_alpha, m_transform;
@@ -92,6 +94,102 @@ Symbolic Transform::get_actuated_joint(){
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+
+struct MultiplyExpression {
+    bool positive;
+    std::vector<std::string> elements;
+};
+struct SumExpression {
+    std::vector<MultiplyExpression> elements;
+};
+
+class ExpressionTree {
+public:
+    ExpressionTree(std::string expr);
+    ~ExpressionTree();
+    void simplify();
+
+    SumExpression m_expr;
+};
+
+std::ostream &operator<<(std::ostream &os, ExpressionTree const &tree) {
+    for (auto mult : tree.m_expr.elements) {
+        os << ((mult.positive) ? "+" : "-");
+        os << mult.elements.front();
+        for (auto it = mult.elements.begin()+1; it != mult.elements.end(); ++it) {
+            os << "*" << *it;
+        }
+    }
+    return os;
+}
+
+ExpressionTree::ExpressionTree(std::string expr) {
+    std::string element = "";
+    MultiplyExpression mult;
+    mult.positive = true;
+
+    auto add_element_to_tree = [&] () {
+        if (element.size()) {
+            mult.elements.push_back(element);
+            element.clear();
+        }
+        if (mult.elements.size()) {
+            m_expr.elements.push_back(mult);
+            mult.elements.clear();
+        }
+    };
+
+    for (char c : expr) {
+        switch (c) {
+            case '+':
+                add_element_to_tree();
+                mult.positive = true;
+                break;
+            case '-':
+                add_element_to_tree();
+                mult.positive = false;
+                break;
+            case '*':
+                if (element.size()) {
+                    mult.elements.push_back(element);
+                    element.clear();
+                }
+                break;
+            default:
+                element.append(1,c);
+                break;
+        }
+    }
+    add_element_to_tree();
+}
+
+ExpressionTree::~ExpressionTree() {}
+
+void ExpressionTree::simplify() {
+    auto get_scalar = [&](MultiplyExpression expr) {
+        for (std::string element : expr.elements) {
+            if (element.size() > 0 &&
+                   ( (element[0] >= '0' && element[0] <= '9') || element[0] == '.' )) {
+                return element;
+            }
+        }
+        return std::string("");
+    };
+
+    for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
+        std::string scalar1 = get_scalar(*expr1);
+        for (auto expr2 = (expr1+1); expr2 != m_expr.elements.end(); expr2++) {
+            std::string scalar2 = get_scalar(*expr2);
+            if (scalar1 == scalar2) {
+                std::cout << "S1:" << scalar1 << " / S2: " << scalar2 << "\n";
+            }
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 class Arm {
 public:
@@ -126,7 +224,7 @@ Arm::Arm(std::vector<Transform> transforms){
 
     for (auto joint : m_actuated_joints) {
         //std::string name = std::string(name(joint));
-        Symbolic diff_kin("d_dq");//+name);
+        Symbolic diff_kin("d_d");//+name);
         diff_kin = df(m_forward_kinematics, joint);
         m_differential_kinematics.push_back(diff_kin);
     }
@@ -137,6 +235,21 @@ Arm::~Arm(){
 
 static void replace(std::string* in, std::string pattern, std::string replacement){
     *in = std::regex_replace( *in, std::regex(pattern), replacement );
+}
+
+std::vector<std::string> split(const std::string& str, const std::string& delim)
+{
+    std::vector<std::string> tokens;
+    size_t prev = 0, pos = 0;
+    do {
+        pos = str.find(delim, prev);
+        if (pos == string::npos) pos = str.length();
+        string token = str.substr(prev, pos-prev);
+        if (!token.empty()) tokens.push_back(token);
+        prev = pos + delim.length();
+    }
+    while (pos < str.length() && prev < str.length());
+    return tokens;
 }
 
 static std::string get_name(const Symbolic& symb){
@@ -158,7 +271,12 @@ void Arm::export_expressions(){
         stream.str(std::string());
         stream << m_differential_kinematics[index];
         dif_str.push_back(stream.str());
+        replace(&dif_str[index], " * ", " ");
+        replace(&dif_str[index], "\\[*\\]*", "");
     }
+
+    replace(&kin_str, " * ", " ");
+    replace(&kin_str, "\\[*\\]*", "");
     for (auto joint : m_actuated_joints) {
         std::string name = get_name(joint);
 
@@ -169,16 +287,25 @@ void Arm::export_expressions(){
             replace(&dif_str[index], "cos\\("+name+"\\)", "c_"+name);
         }
     }
-    //std::cout << kin_str;
+    std::cout << kin_str;
     std::cout << dif_str[0];
+
+
+    std::vector<std::string> expressions = split (kin_str, " ");
+    for (auto e : expressions) {
+        ExpressionTree tree (e);
+        tree.simplify();
+        std::cout << " TREE : \n" << e << "\n" << tree;
+    }
 }
 
+///////////////////////////////////////////////////////////////////////////////
 
 int main (int argc, char* argv[]) {
     Transform T1(1,1,1,1,REVOLUTE,1);
     Transform T2(1,1,1,1,REVOLUTE,2);
     Transform T3(1,1,1,1,REVOLUTE,3);
-    std::vector<Transform> transforms = {T1, T2};
+    std::vector<Transform> transforms = {T1, T2, T3};
 
 
     Arm arm(transforms);
