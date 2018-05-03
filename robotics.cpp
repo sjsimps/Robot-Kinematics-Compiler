@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <regex>
+#include <algorithm>
 
 #include "symbolicc++.h"
 
@@ -168,7 +169,7 @@ ExpressionTree::ExpressionTree(std::string expr) {
 ExpressionTree::~ExpressionTree() {}
 
 void ExpressionTree::simplify() {
-    auto get_scalar = [&](MultiplyExpression expr) {
+    auto get_scalar = [](const MultiplyExpression& expr) {
         for (std::string element : expr.elements) {
             if (element.size() > 0 &&
                    ( (element[0] >= '0' && element[0] <= '9') || element[0] == '.' )) {
@@ -178,12 +179,38 @@ void ExpressionTree::simplify() {
         return std::string("");
     };
 
+    auto get_common_elements = [](const MultiplyExpression& expr1, const MultiplyExpression& expr2,
+                                   std::vector<std::string>* expr1_elements, std::vector<std::string>* expr2_elements) {
+        std::vector<std::string> common;
+        for (auto elem1 = expr1.elements.begin(); elem1 != expr1.elements.end(); elem1++) {
+            auto found = std::find(expr2.elements.begin(), expr2.elements.end(), *elem1);
+            if (found == expr2.elements.end()) {
+                expr1_elements->push_back(*elem1);
+                continue;
+            }
+            common.push_back(*elem1);
+        }
+        for (auto elem2 = expr2.elements.begin(); elem2 != expr2.elements.end(); elem2++) {
+            auto found = std::find(expr1.elements.begin(), expr1.elements.end(), *elem2);
+            if (found == expr1.elements.end()) {
+                expr2_elements->push_back(*elem2);
+            }
+        }
+        return common;
+    };
+
     for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
         std::string scalar1 = get_scalar(*expr1);
         for (auto expr2 = (expr1+1); expr2 != m_expr.elements.end(); expr2++) {
             std::string scalar2 = get_scalar(*expr2);
             if (scalar1 == scalar2) {
-                std::cout << "S1:" << scalar1 << " / S2: " << scalar2 << "\n";
+                std::vector<std::string> expr1_elem, expr2_elem;
+                get_common_elements(*expr1, *expr2, &expr1_elem, &expr2_elem);
+                std::cout << "\nS1:" << scalar1 << " / S2: " << scalar2 << " / EXPR1ELEM: ";
+                for (auto s: expr1_elem) { std::cout << s << " "; }
+                std::cout << " / EXPRE2ELEM: ";
+                for (auto s: expr2_elem) { std::cout << s << " "; }
+                std::cout << "\n";
             }
         }
     }
@@ -244,7 +271,8 @@ std::vector<std::string> split(const std::string& str, const std::string& delim)
     do {
         pos = str.find(delim, prev);
         if (pos == string::npos) pos = str.length();
-        string token = str.substr(prev, pos-prev);
+        std::string token = str.substr(prev, pos-prev);
+        token.erase(std::remove_if(token.begin(), token.end(), ::isspace), token.end());
         if (!token.empty()) tokens.push_back(token);
         prev = pos + delim.length();
     }
@@ -297,6 +325,37 @@ void Arm::export_expressions(){
         tree.simplify();
         std::cout << " TREE : \n" << e << "\n" << tree;
     }
+    std::cout << "\n//////////////////////////////\n"
+        << "#include <iostream>\n"
+        << "#include <string>\n"
+        << "#include <vector>\n"
+        << "#include <math.h>\n"
+        << "static std::vector<double> forward_kinematics(";
+    for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
+        std::string name = get_name(*joint);
+        std::cout << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
+    }
+    for (auto joint : m_actuated_joints) {
+        std::string name = get_name(joint);
+        std::cout << "    double c_" << name << " = cos(" << name << ");\n"
+                  << "    double s_" << name << " = sin(" << name << ");\n";
+    }
+    std::cout << "    std::vector<double> kinematics;\n";
+    std::cout << "    double result;\n";
+    for (auto expr : expressions) {
+        std::cout << "    result = " << expr << ";\n";
+        std::cout << "    kinematics.push_back(result);\n";
+    }
+    std::cout << "    return kinematics;\n"
+              << "}\n"
+              << "int main (int argc, char* argv[]) {\n"
+              << "    std::vector<double> result = forward_kinematics(";
+    for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
+        std::cout << "1.0" << ((joint == m_actuated_joints.end()-1) ? ");\n" : ", ");
+    }
+    std::cout << "    for (auto r : result) { std::cout << \"\\n\" << r; }\n"
+              << "}\n";
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////

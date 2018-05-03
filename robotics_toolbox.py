@@ -1,4 +1,5 @@
 
+# -*- coding: utf-8 -*-
 from math import *
 import random
 import numpy as np
@@ -54,8 +55,8 @@ class Arm:
         self._set_dh_transforms()
 
     def _set_dh_transforms(self):
-        raise NotImplementedError, "The set_dh_transforms method must be implemented"
-                                   " to match the desired manipulator geometry"
+        raise NotImplementedError, "The set_dh_transforms method must be implemented \
+        to match the desired manipulator geometry"
 
         """
         https://en.wikipedia.org/wiki/Denavit%E2%80%93Hartenberg_parameters
@@ -82,14 +83,15 @@ class Arm:
 
     def get_forward_kinematics(self):
         A = []
-        R = None
+        R = []
         for dh in self.dh:
             trans = Transform(dh[0], dh[1], dh[2], dh[3])
-            if R == None:
+            if len(R) == 0:
                 R = trans.get_A_matrix()
             else:
                 R = np.matmul(R,trans.get_A_matrix())
-        return (R[0][3],R[1][3],R[2][3])
+        return R #(R[0][3],R[1][3],R[2][3])
+        #return (R[0][3],R[1][3],R[2][3])
 
     def get_inverse_kinematics():
         # TODO : Use Nelder-mead as a generalized IK platform
@@ -122,3 +124,15 @@ class Arm:
         ax.set_zlabel('Z')
         plt.show()
 
+class ArmTest(Arm):
+    def __init__(self, joints):
+        Arm.__init__(self, joints)
+        print "INIT"
+
+    def _set_dh_transforms(self):
+        self.dh = [ [self.joints[0],1,1,1],
+                    [self.joints[1],1,1,1],
+                    [self.joints[2],1,1,1] ]
+
+arm = ArmTest([1.0, 1.0, 1.0])
+print arm.get_forward_kinematics()
