@@ -115,14 +115,25 @@ public:
     SumExpression m_expr;
 };
 
-std::ostream &operator<<(std::ostream &os, ExpressionTree const &tree) {
-    for (auto mult : tree.m_expr.elements) {
-        os << ((mult.positive) ? "+" : "-");
-        os << mult.elements.front();
-        for (auto it = mult.elements.begin()+1; it != mult.elements.end(); ++it) {
-            os << "*" << *it;
-        }
+std::ostream &operator<<(std::ostream &os, MultiplyExpression const &mult_exp) {
+    if (mult_exp.elements.size() == 0) {
+        return os;
     }
+    os << ((mult_exp.positive) ? "+" : "-");
+    os << mult_exp.elements.front();
+    for (auto it = mult_exp.elements.begin()+1; it != mult_exp.elements.end(); ++it) {
+        os << "*" << *it;
+    }
+    return os;
+}
+std::ostream &operator<<(std::ostream &os, SumExpression const &sum_exp) {
+    for (auto mult_exp : sum_exp.elements) {
+        os << mult_exp;
+    }
+    return os;
+}
+std::ostream &operator<<(std::ostream &os, ExpressionTree const &tree) {
+    os << tree.m_expr;
     return os;
 }
 
@@ -199,6 +210,74 @@ void ExpressionTree::simplify() {
         return common;
     };
 
+    auto angle_sum_difference = [get_common_elements](const MultiplyExpression& expr1, const MultiplyExpression& expr2) {
+
+        std::vector<std::string> common, expr1_elem, expr2_elem;
+        std::string a1, b1, a2, b2;
+        char op11, op12, op21, op22;
+        MultiplyExpression retval;
+
+        common = get_common_elements(expr1, expr2, &expr1_elem, &expr2_elem);
+
+        if (expr1_elem.size() != 2 || expr2_elem.size() != 2) {
+            return retval;// NOTHING!
+        }
+std::cout <<"\n ---------------------------------------------- 0\n";
+
+        a1 = expr1_elem[0].substr(1);
+        b1 = expr1_elem[1].substr(1);
+        a2 = expr2_elem[0].substr(1);
+        b2 = expr2_elem[1].substr(1);
+
+        op11 = expr1_elem[0][0];
+        op12 = expr1_elem[1][0];
+        op21 = expr2_elem[0][0];
+        op22 = expr2_elem[1][0];
+
+        // cos(a+b) == cos(a)cos(b) - sin(a)sin(b)
+        // check operators
+        if ( (op11 == op12 && op21 == op22) &&
+             ((op11 == 'c' && op22 == 's') || (op11 == 's' && op22 == 'c')) &&
+             expr1.positive != expr2.positive ) {
+std::cout <<"\n ---------------------------------------------- 1\n";
+            // check operands
+            if ( (a1 == a2 && b1 == b2) ||
+                 (a1 == b2 && b1 == a2) ) {
+std::cout <<"\n ---------------------------------------------- 2\n";
+                // SIMPLIFY!
+                retval.positive = ( (op11 == 'c' && expr1.positive) ||
+                                    (op22 == 'c' && expr2.positive) );
+                retval.elements = common;
+                std::string simple ("c" + a1 + b1);
+                retval.elements.push_back(simple);
+                return retval;
+            }
+        }
+
+        // sin(a+b) == sin(a)cos(b) + cos(a)sin(b)
+        // check operators
+        if ( (op11 != op12 && op21 != op22) &&
+             (op11 == 'c' || op11 == 's') &&
+             (op12 == 'c' || op12 == 's') &&
+             (op21 == 'c' || op21 == 's') &&
+             (op22 == 'c' || op22 == 's') &&
+             expr1.positive == expr2.positive ) {
+std::cout <<"\n ---------------------------------------------- 3\n";
+            // check operands
+            if ( (a1 == a2 && b1 == b2) ||
+                 (a1 == b2 && b1 == a2) ) {
+std::cout <<"\n ---------------------------------------------- 4\n";
+                // SIMPLIFY!
+                retval.positive = expr1.positive;
+                retval.elements = common;
+                std::string simple ("s" + a1 + b1);
+                retval.elements.push_back(simple);
+                return retval;
+            }
+        }
+        return retval;
+    };
+
     for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
         std::string scalar1 = get_scalar(*expr1);
         for (auto expr2 = (expr1+1); expr2 != m_expr.elements.end(); expr2++) {
@@ -206,10 +285,11 @@ void ExpressionTree::simplify() {
             if (scalar1 == scalar2) {
                 std::vector<std::string> expr1_elem, expr2_elem;
                 get_common_elements(*expr1, *expr2, &expr1_elem, &expr2_elem);
-                std::cout << "\nS1:" << scalar1 << " / S2: " << scalar2 << " / EXPR1ELEM: ";
+                std::cout << "\nS1:" << *expr1 << " / S2: " << *expr2 << " / EXPR1ELEM: ";
                 for (auto s: expr1_elem) { std::cout << s << " "; }
                 std::cout << " / EXPRE2ELEM: ";
                 for (auto s: expr2_elem) { std::cout << s << " "; }
+                std::cout << " / SIMPLE: " << angle_sum_difference(*expr1, *expr2);
                 std::cout << "\n";
             }
         }
