@@ -4,6 +4,7 @@
 #include <vector>
 #include <regex>
 #include <algorithm>
+#include <set>
 
 #include "symbolicc++.h"
 
@@ -110,7 +111,7 @@ class ExpressionTree {
 public:
     ExpressionTree(std::string expr);
     ~ExpressionTree();
-    void simplify();
+    std::set<std::string> simplify();
 
     SumExpression m_expr;
 };
@@ -179,7 +180,10 @@ ExpressionTree::ExpressionTree(std::string expr) {
 
 ExpressionTree::~ExpressionTree() {}
 
-void ExpressionTree::simplify() {
+std::set<std::string> ExpressionTree::simplify() {
+
+    std::set<std::string> declared_variables;
+
     auto get_scalar = [](const MultiplyExpression& expr) {
         for (std::string element : expr.elements) {
             if (element.size() > 0 &&
@@ -210,7 +214,7 @@ void ExpressionTree::simplify() {
         return common;
     };
 
-    auto angle_sum_difference = [get_common_elements](const MultiplyExpression& expr1, const MultiplyExpression& expr2) {
+    auto angle_sum_difference = [get_common_elements](const MultiplyExpression& expr1, const MultiplyExpression& expr2, std::string* new_variable_declare) {
 
         std::vector<std::string> common, expr1_elem, expr2_elem;
         std::string a1, b1, a2, b2;
@@ -222,7 +226,6 @@ void ExpressionTree::simplify() {
         if (expr1_elem.size() != 2 || expr2_elem.size() != 2) {
             return retval;// NOTHING!
         }
-std::cout <<"\n ---------------------------------------------- 0\n";
 
         a1 = expr1_elem[0].substr(1);
         b1 = expr1_elem[1].substr(1);
@@ -239,17 +242,20 @@ std::cout <<"\n ---------------------------------------------- 0\n";
         if ( (op11 == op12 && op21 == op22) &&
              ((op11 == 'c' && op22 == 's') || (op11 == 's' && op22 == 'c')) &&
              expr1.positive != expr2.positive ) {
-std::cout <<"\n ---------------------------------------------- 1\n";
             // check operands
             if ( (a1 == a2 && b1 == b2) ||
                  (a1 == b2 && b1 == a2) ) {
-std::cout <<"\n ---------------------------------------------- 2\n";
                 // SIMPLIFY!
                 retval.positive = ( (op11 == 'c' && expr1.positive) ||
                                     (op22 == 'c' && expr2.positive) );
                 retval.elements = common;
                 std::string simple ("c" + a1 + b1);
                 retval.elements.push_back(simple);
+
+                // Declaring new needed variable
+                std::string sum = a1.substr(1) + b1;
+                std::replace(sum.begin(), sum.end(), '_', '+');
+                *new_variable_declare = "double " + simple + " = cos(" + sum + ");\n";
                 return retval;
             }
         }
@@ -262,38 +268,62 @@ std::cout <<"\n ---------------------------------------------- 2\n";
              (op21 == 'c' || op21 == 's') &&
              (op22 == 'c' || op22 == 's') &&
              expr1.positive == expr2.positive ) {
-std::cout <<"\n ---------------------------------------------- 3\n";
             // check operands
             if ( (a1 == a2 && b1 == b2) ||
                  (a1 == b2 && b1 == a2) ) {
-std::cout <<"\n ---------------------------------------------- 4\n";
                 // SIMPLIFY!
                 retval.positive = expr1.positive;
                 retval.elements = common;
                 std::string simple ("s" + a1 + b1);
                 retval.elements.push_back(simple);
+
+                // Declaring new needed variable
+                std::string sum = a1.substr(1) + b1;
+                std::replace(sum.begin(), sum.end(), '_', '+');
+                *new_variable_declare = "double " + simple + " = sin(" + sum + ");\n";
                 return retval;
             }
         }
         return retval;
     };
 
-    for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
-        std::string scalar1 = get_scalar(*expr1);
-        for (auto expr2 = (expr1+1); expr2 != m_expr.elements.end(); expr2++) {
-            std::string scalar2 = get_scalar(*expr2);
-            if (scalar1 == scalar2) {
-                std::vector<std::string> expr1_elem, expr2_elem;
-                get_common_elements(*expr1, *expr2, &expr1_elem, &expr2_elem);
-                std::cout << "\nS1:" << *expr1 << " / S2: " << *expr2 << " / EXPR1ELEM: ";
-                for (auto s: expr1_elem) { std::cout << s << " "; }
-                std::cout << " / EXPRE2ELEM: ";
-                for (auto s: expr2_elem) { std::cout << s << " "; }
-                std::cout << " / SIMPLE: " << angle_sum_difference(*expr1, *expr2);
-                std::cout << "\n";
+    bool simplifying = false;
+    do {
+        for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
+            std::string scalar1 = get_scalar(*expr1);
+            for (auto expr2 = (expr1+1); expr2 != m_expr.elements.end(); expr2++) {
+                std::string scalar2 = get_scalar(*expr2);
+                if (scalar1 == scalar2) {
+                    std::string new_variable;
+                    auto simplified = angle_sum_difference(*expr1, *expr2, &new_variable);
+                    if (simplified.elements.size() > 0) {
+                        m_expr.elements.erase(expr2);
+                        m_expr.elements.erase(expr1);
+                        m_expr.elements.push_back(simplified);
+                        simplifying = true;
+                        declared_variables.insert(new_variable);
+                        break;
+                    }
+
+                    /*
+                    std::vector<std::string> expr1_elem, expr2_elem;
+                    get_common_elements(*expr1, *expr2, &expr1_elem, &expr2_elem);
+                    std::cout << "\nS1:" << *expr1 << " / S2: " << *expr2 << " / EXPR1ELEM: ";
+                    for (auto s: expr1_elem) { std::cout << s << " "; }
+                    std::cout << " / EXPRE2ELEM: ";
+                    for (auto s: expr2_elem) { std::cout << s << " "; }
+                    std::cout << " / SIMPLE: " << 
+                    std::cout << "\n";
+                    */
+                }
+                simplifying = false;
+            }
+            if (simplifying) {
+                break;
             }
         }
-    }
+    } while (simplifying);
+    return declared_variables;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -398,19 +428,27 @@ void Arm::export_expressions(){
     std::cout << kin_str;
     std::cout << dif_str[0];
 
-
     std::vector<std::string> expressions = split (kin_str, " ");
-    for (auto e : expressions) {
-        ExpressionTree tree (e);
-        tree.simplify();
-        std::cout << " TREE : \n" << e << "\n" << tree;
+    std::set<std::string> new_variables;
+    for (int expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
+        ExpressionTree tree (expressions[expr_idx]);
+        auto variables = tree.simplify();
+        new_variables.insert(variables.begin(), variables.end());
+
+        //std::cout << " TREE : \n" << expressions[expr_idx] << "\n" << tree;
+
+        stream.str(std::string());
+        stream << tree;
+        expressions[expr_idx] = stream.str();
     }
+
     std::cout << "\n//////////////////////////////\n"
         << "#include <iostream>\n"
         << "#include <string>\n"
         << "#include <vector>\n"
         << "#include <math.h>\n"
         << "static std::vector<double> forward_kinematics(";
+
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
         std::string name = get_name(*joint);
         std::cout << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
@@ -420,6 +458,10 @@ void Arm::export_expressions(){
         std::cout << "    double c_" << name << " = cos(" << name << ");\n"
                   << "    double s_" << name << " = sin(" << name << ");\n";
     }
+    for (auto var : new_variables) {
+        std::cout << "    " << var;
+    }
+
     std::cout << "    std::vector<double> kinematics;\n";
     std::cout << "    double result;\n";
     for (auto expr : expressions) {

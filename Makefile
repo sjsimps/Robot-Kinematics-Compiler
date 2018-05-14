@@ -21,3 +21,5 @@ clean:
 $(PROG):
 	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(SRC) -o $(PROG)
 
+test:
+	g++-4.9 -O2 $(CPP_FLAGS) out.cpp -o test
