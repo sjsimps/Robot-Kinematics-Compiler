@@ -328,48 +328,6 @@ std::set<std::string> ExpressionTree::simplify() {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-class Arm {
-public:
-    Symbolic m_forward_kinematics;
-    Symbolic m_inverse_differential_kinematics_3d;
-    Symbolic m_inverse_differential_kinematics_6d;
-
-    std::vector<Symbolic> m_differential_kinematics;
-
-    std::vector<Symbolic> m_actuated_joints;
-
-    Arm(std::vector<Transform> transforms);
-    ~Arm();
-    void export_expressions();
-};
-
-Arm::Arm(std::vector<Transform> transforms){
-    bool first = true;
-    for (auto T : transforms) {
-        if (T.m_joint_type == REVOLUTE ||
-            T.m_joint_type == PRISMATIC){
-            m_actuated_joints.push_back(T.get_actuated_joint());
-        }
-
-        if (first) {
-            m_forward_kinematics = T.m_transform;
-            first = false;
-            continue;
-        }
-        m_forward_kinematics = m_forward_kinematics*T.m_transform;
-    }
-
-    for (auto joint : m_actuated_joints) {
-        //std::string name = std::string(name(joint));
-        Symbolic diff_kin("d_d");//+name);
-        diff_kin = df(m_forward_kinematics, joint);
-        m_differential_kinematics.push_back(diff_kin);
-    }
-}
-
-Arm::~Arm(){
-}
-
 static void replace(std::string* in, std::string pattern, std::string replacement){
     *in = std::regex_replace( *in, std::regex(pattern), replacement );
 }
@@ -396,6 +354,46 @@ static std::string get_name(const Symbolic& symb){
     nstream << symb;
     name = nstream.str();
     return name;
+}
+
+
+
+class Arm {
+public:
+    Symbolic m_forward_kinematics;
+    std::vector<Symbolic> m_differential_kinematics;
+    std::vector<Symbolic> m_actuated_joints;
+
+    Arm(std::vector<Transform> transforms);
+    ~Arm();
+    void export_expressions();
+};
+
+Arm::Arm(std::vector<Transform> transforms){
+    bool first = true;
+    for (auto T : transforms) {
+        if (T.m_joint_type == REVOLUTE ||
+            T.m_joint_type == PRISMATIC){
+            m_actuated_joints.push_back(T.get_actuated_joint());
+        }
+
+        if (first) {
+            m_forward_kinematics = T.m_transform;
+            first = false;
+            continue;
+        }
+        m_forward_kinematics = m_forward_kinematics*T.m_transform;
+    }
+
+    for (auto joint : m_actuated_joints) {
+        std::string name = get_name(joint);
+        Symbolic diff_kin("d"+name);
+        diff_kin = df(m_forward_kinematics, joint);
+        m_differential_kinematics.push_back(diff_kin);
+    }
+}
+
+Arm::~Arm(){
 }
 
 void Arm::export_expressions(){
@@ -428,27 +426,27 @@ void Arm::export_expressions(){
     std::cout << kin_str;
     std::cout << dif_str[0];
 
+    std::cout << "\n//////////////////////////////\n"
+        << "#include <iostream>\n"
+        << "#include <string>\n"
+        << "#include <vector>\n"
+        << "#include <math.h>\n";
+
+    // Compile Forward Kinematics:
+
     std::vector<std::string> expressions = split (kin_str, " ");
     std::set<std::string> new_variables;
     for (int expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
+        // Simplify the kinematics expressions
         ExpressionTree tree (expressions[expr_idx]);
         auto variables = tree.simplify();
         new_variables.insert(variables.begin(), variables.end());
-
-        //std::cout << " TREE : \n" << expressions[expr_idx] << "\n" << tree;
-
         stream.str(std::string());
         stream << tree;
         expressions[expr_idx] = stream.str();
     }
 
-    std::cout << "\n//////////////////////////////\n"
-        << "#include <iostream>\n"
-        << "#include <string>\n"
-        << "#include <vector>\n"
-        << "#include <math.h>\n"
-        << "static std::vector<double> forward_kinematics(";
-
+    std::cout << "static std::vector<double> forward_kinematics(";
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
         std::string name = get_name(*joint);
         std::cout << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
@@ -461,7 +459,6 @@ void Arm::export_expressions(){
     for (auto var : new_variables) {
         std::cout << "    " << var;
     }
-
     std::cout << "    std::vector<double> kinematics;\n";
     std::cout << "    double result;\n";
     for (auto expr : expressions) {
@@ -469,13 +466,58 @@ void Arm::export_expressions(){
         std::cout << "    kinematics.push_back(result);\n";
     }
     std::cout << "    return kinematics;\n"
-              << "}\n"
-              << "int main (int argc, char* argv[]) {\n"
+              << "}\n";
+
+    // Compile Differential Kinematics:
+    for (int index = 0; index < m_actuated_joints.size(); index++) {
+        std::string joint_name = get_name(m_actuated_joints[index]);
+        expressions = split (dif_str[index], " ");
+        new_variables.clear();
+        for (int expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
+            // Simplify the kinematics expressions
+            ExpressionTree tree (expressions[expr_idx]);
+            auto variables = tree.simplify();
+            new_variables.insert(variables.begin(), variables.end());
+
+            //std::cout << " TREE : \n" << expressions[expr_idx] << "\n" << tree;
+
+            stream.str(std::string());
+            stream << tree;
+            expressions[expr_idx] = stream.str();
+        }
+
+        std::cout << "static std::vector<double> differential_kinematics_d" << joint_name << "(";
+        for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
+            std::string name = get_name(*joint);
+            std::cout << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
+        }
+        for (auto joint : m_actuated_joints) {
+            std::string name = get_name(joint);
+            std::cout << "    double c_" << name << " = cos(" << name << ");\n"
+                      << "    double s_" << name << " = sin(" << name << ");\n";
+        }
+        for (auto var : new_variables) {
+            std::cout << "    " << var;
+        }
+        std::cout << "    std::vector<double> kinematics;\n";
+        std::cout << "    double result;\n";
+        for (auto expr : expressions) {
+            std::cout << "    result = " << expr << ";\n";
+            std::cout << "    kinematics.push_back(result);\n";
+        }
+        std::cout << "    return kinematics;\n"
+                  << "}\n";
+    }
+
+
+    // Test output:
+
+    std::cout << "int main (int argc, char* argv[]) {\n"
               << "    std::vector<double> result = forward_kinematics(";
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
         std::cout << "1.0" << ((joint == m_actuated_joints.end()-1) ? ");\n" : ", ");
     }
-    std::cout << "    for (auto r : result) { std::cout << \"\\n\" << r; }\n"
+    std::cout << "    for (auto r : result) { std::cout << r << \"\\n\"; }\n"
               << "}\n";
 
 }
