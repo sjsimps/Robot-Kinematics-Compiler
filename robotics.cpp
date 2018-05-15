@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <regex>
@@ -287,6 +288,32 @@ std::set<std::string> ExpressionTree::simplify() {
         return retval;
     };
 
+    auto common_factor = [get_common_elements](const MultiplyExpression& expr1, const MultiplyExpression& expr2) {
+        MultiplyExpression retval, factor1, factor2;
+        std::string new_element;
+        std::ostringstream nstream;
+
+        retval.elements = get_common_elements(expr1, expr2, &factor1.elements, &factor2.elements);
+
+        if (retval.elements.size() == 0) {
+            return retval;
+        }
+
+        retval.positive = true;
+        factor1.positive = expr1.positive;
+        factor2.positive = expr2.positive;
+
+        nstream << "("
+                << factor1 << ((factor1.elements.size() == 0) ? ((factor1.positive) ? "+1" : "-1" ) : "")
+                << factor2 << ((factor2.elements.size() == 0) ? ((factor2.positive) ? "+1" : "-1" ) : "")
+                << ")";
+        new_element = nstream.str();
+        retval.elements.push_back(new_element);
+
+        return retval;
+    };
+
+    // Angle-sum difference simplification
     bool simplifying = false;
     do {
         for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
@@ -304,17 +331,6 @@ std::set<std::string> ExpressionTree::simplify() {
                         declared_variables.insert(new_variable);
                         break;
                     }
-
-                    /*
-                    std::vector<std::string> expr1_elem, expr2_elem;
-                    get_common_elements(*expr1, *expr2, &expr1_elem, &expr2_elem);
-                    std::cout << "\nS1:" << *expr1 << " / S2: " << *expr2 << " / EXPR1ELEM: ";
-                    for (auto s: expr1_elem) { std::cout << s << " "; }
-                    std::cout << " / EXPRE2ELEM: ";
-                    for (auto s: expr2_elem) { std::cout << s << " "; }
-                    std::cout << " / SIMPLE: " << 
-                    std::cout << "\n";
-                    */
                 }
                 simplifying = false;
             }
@@ -323,6 +339,29 @@ std::set<std::string> ExpressionTree::simplify() {
             }
         }
     } while (simplifying);
+
+    // Common factoring - Not guaranteed to be minimal!
+    // Could add some searching to improve how expressions are factored
+    simplifying = false;
+    do {
+        for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
+            for (auto expr2 = (expr1+1); expr2 != m_expr.elements.end(); expr2++) {
+                auto simplified = common_factor(*expr1, *expr2);
+                if (simplified.elements.size() > 0) {
+                    m_expr.elements.erase(expr2);
+                    m_expr.elements.erase(expr1);
+                    m_expr.elements.push_back(simplified);
+                    simplifying = true;
+                    break;
+                }
+                simplifying = false;
+            }
+            if (simplifying) {
+                break;
+            }
+        }
+    } while (simplifying);
+
     return declared_variables;
 }
 
@@ -370,6 +409,7 @@ public:
 };
 
 Arm::Arm(std::vector<Transform> transforms){
+    std::cout << "Generating kinematic chain ... " << std::flush;
     bool first = true;
     for (auto T : transforms) {
         if (T.m_joint_type == REVOLUTE ||
@@ -391,15 +431,18 @@ Arm::Arm(std::vector<Transform> transforms){
         diff_kin = df(m_forward_kinematics, joint);
         m_differential_kinematics.push_back(diff_kin);
     }
+    std::cout << "Done\n" << std::flush;
 }
 
 Arm::~Arm(){
 }
 
 void Arm::export_expressions(){
+    std::cout << "Compiling kinematic expressions ..." << std::flush;
     std::string kin_str;
     std::vector<std::string> dif_str;
     std::ostringstream stream;
+    std::ofstream outfile ("out.cpp", std::ofstream::binary);
     stream << m_forward_kinematics;
     kin_str = stream.str();
 
@@ -423,14 +466,12 @@ void Arm::export_expressions(){
             replace(&dif_str[index], "cos\\("+name+"\\)", "c_"+name);
         }
     }
-    std::cout << kin_str;
-    std::cout << dif_str[0];
 
-    std::cout << "\n//////////////////////////////\n"
-        << "#include <iostream>\n"
-        << "#include <string>\n"
-        << "#include <vector>\n"
-        << "#include <math.h>\n";
+    outfile << "#include <iostream>\n"
+            << "#include <string>\n"
+            << "#include <vector>\n"
+            << "#include <math.h>\n"
+            << "#include <time.h>\n";
 
     // Compile Forward Kinematics:
 
@@ -446,27 +487,27 @@ void Arm::export_expressions(){
         expressions[expr_idx] = stream.str();
     }
 
-    std::cout << "static std::vector<double> forward_kinematics(";
+    outfile << "static std::vector<double> forward_kinematics(";
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
         std::string name = get_name(*joint);
-        std::cout << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
+        outfile << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
     }
     for (auto joint : m_actuated_joints) {
         std::string name = get_name(joint);
-        std::cout << "    double c_" << name << " = cos(" << name << ");\n"
-                  << "    double s_" << name << " = sin(" << name << ");\n";
+        outfile << "    double c_" << name << " = cos(" << name << ");\n"
+                << "    double s_" << name << " = sin(" << name << ");\n";
     }
     for (auto var : new_variables) {
-        std::cout << "    " << var;
+        outfile << "    " << var;
     }
-    std::cout << "    std::vector<double> kinematics;\n";
-    std::cout << "    double result;\n";
+    outfile << "    std::vector<double> kinematics;\n";
+    outfile << "    double result;\n";
     for (auto expr : expressions) {
-        std::cout << "    result = " << expr << ";\n";
-        std::cout << "    kinematics.push_back(result);\n";
+        outfile << "    result = " << expr << ";\n";
+        outfile << "    kinematics.push_back(result);\n";
     }
-    std::cout << "    return kinematics;\n"
-              << "}\n";
+    outfile << "    return kinematics;\n"
+            << "}\n";
 
     // Compile Differential Kinematics:
     for (int index = 0; index < m_actuated_joints.size(); index++) {
@@ -486,40 +527,45 @@ void Arm::export_expressions(){
             expressions[expr_idx] = stream.str();
         }
 
-        std::cout << "static std::vector<double> differential_kinematics_d" << joint_name << "(";
+        outfile << "static std::vector<double> differential_kinematics_d" << joint_name << "(";
         for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
             std::string name = get_name(*joint);
-            std::cout << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
+            outfile << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
         }
         for (auto joint : m_actuated_joints) {
             std::string name = get_name(joint);
-            std::cout << "    double c_" << name << " = cos(" << name << ");\n"
-                      << "    double s_" << name << " = sin(" << name << ");\n";
+            outfile << "    double c_" << name << " = cos(" << name << ");\n"
+                    << "    double s_" << name << " = sin(" << name << ");\n";
         }
         for (auto var : new_variables) {
-            std::cout << "    " << var;
+            outfile << "    " << var;
         }
-        std::cout << "    std::vector<double> kinematics;\n";
-        std::cout << "    double result;\n";
+        outfile << "    std::vector<double> kinematics;\n";
+        outfile << "    double result;\n";
         for (auto expr : expressions) {
-            std::cout << "    result = " << expr << ";\n";
-            std::cout << "    kinematics.push_back(result);\n";
+            outfile << "    result = " << expr << ";\n";
+            outfile << "    kinematics.push_back(result);\n";
         }
-        std::cout << "    return kinematics;\n"
-                  << "}\n";
+        outfile << "    return kinematics;\n"
+                << "}\n";
     }
 
 
     // Test output:
 
-    std::cout << "int main (int argc, char* argv[]) {\n"
-              << "    std::vector<double> result = forward_kinematics(";
+    outfile << "int main (int argc, char* argv[]) {\n"
+            << "    clock_t timer = clock();\n"
+            << "    std::vector<double> result = forward_kinematics(";
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
-        std::cout << "1.0" << ((joint == m_actuated_joints.end()-1) ? ");\n" : ", ");
+        outfile << "1.0" << ((joint == m_actuated_joints.end()-1) ? ");\n" : ", ");
     }
-    std::cout << "    for (auto r : result) { std::cout << r << \"\\n\"; }\n"
-              << "}\n";
+    outfile << "    for (auto r : result) { std::cout << r << \"\\n\"; }\n"
+            << "    timer = clock() - timer;\n"
+            << "    std::cout << \"Forward Kinematics Computation Time : \" << ((float)timer)/CLOCKS_PER_SEC << \" seconds\\n\";\n"
+            << "}\n";
 
+
+    std::cout << "Done\n" << std::flush;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -528,7 +574,10 @@ int main (int argc, char* argv[]) {
     Transform T1(1,1,1,1,REVOLUTE,1);
     Transform T2(1,1,1,1,REVOLUTE,2);
     Transform T3(1,1,1,1,REVOLUTE,3);
-    std::vector<Transform> transforms = {T1, T2, T3};
+    Transform T4(1,1,1,1,REVOLUTE,4);
+    Transform T5(1,1,1,1,REVOLUTE,5);
+    Transform T6(1,1,1,1,REVOLUTE,6);
+    std::vector<Transform> transforms = {T1, T2, T3, T4, T5, T6};
 
 
     Arm arm(transforms);
