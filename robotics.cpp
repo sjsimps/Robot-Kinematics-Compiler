@@ -8,6 +8,7 @@
 #include <set>
 
 #include "symbolicc++.h"
+#include <SDL2/SDL.h>
 
 #define PRISMATIC 1
 #define REVOLUTE 2
@@ -26,6 +27,8 @@ public:
     ~Transform();
 
     Symbolic get_actuated_joint();
+    bool is_actuated();
+    std::vector<std::vector<double>> evaluate(double joint=0);
 };
 
 Transform::Transform(double theta, double d, double a, double alpha,
@@ -51,7 +54,7 @@ Transform::Transform(double theta, double d, double a, double alpha,
         case STATIC:
             break;
         default:
-            // TODO : throw
+            throw out_of_range("Transforms must be either REVOLUTE, PRISMATIC, or STATIC");
             break;
     }
 
@@ -75,7 +78,7 @@ Transform::Transform(double theta, double d, double a, double alpha,
                                       m_theta == theta, m_d == d, m_a == a, m_alpha == alpha];
             break;
         default:
-            // TODO : throw
+            throw out_of_range("Transforms must be either REVOLUTE, PRISMATIC, or STATIC");
             break;
     }
 }
@@ -83,17 +86,42 @@ Transform::Transform(double theta, double d, double a, double alpha,
 Transform::~Transform(){
 }
 
-Symbolic Transform::get_actuated_joint(){
+std::vector<std::vector<double>> Transform::evaluate(double joint_value) {
+    Symbolic transform = m_transform;
+    std::vector<std::vector<double>> retval { {1, 0, 0, 0},
+                                              {0, 1, 0, 0},
+                                              {0, 0, 1, 0},
+                                              {0, 0, 0, 1} };
+
+    if (is_actuated()) {
+        Symbolic joint = get_actuated_joint();
+        transform = transform[joint == joint_value];
+    }
+
+    for (int r = 0; r < 4; r++) {
+        for (int c = 0; c < 4; c++) {
+            retval[r][c] = double(transform(r, c));
+        }
+    }
+
+    return retval;
+}
+
+bool Transform::is_actuated() {
+    return (m_joint_type == REVOLUTE || m_joint_type == PRISMATIC);
+}
+
+Symbolic Transform::get_actuated_joint() {
+    if (!is_actuated()) {
+        throw logic_error("Cannot get actuated joint. Joint is not actuated.");
+    }
     switch(m_joint_type) {
         case REVOLUTE:
             return m_theta;
-            break;
         case PRISMATIC:
             return m_d;
-            break;
         default:
-            // TODO : throw
-            break;
+            return 0;
     }
 }
 
@@ -342,6 +370,7 @@ std::set<std::string> ExpressionTree::simplify() {
 
     // Common factoring - Not guaranteed to be minimal!
     // Could add some searching to improve how expressions are factored
+    /* TODO : Ensure this terminates!
     simplifying = false;
     do {
         for (auto expr1 = m_expr.elements.begin(); expr1 != m_expr.elements.end(); expr1++) {
@@ -361,7 +390,7 @@ std::set<std::string> ExpressionTree::simplify() {
             }
         }
     } while (simplifying);
-
+    */
     return declared_variables;
 }
 
@@ -371,7 +400,7 @@ static void replace(std::string* in, std::string pattern, std::string replacemen
     *in = std::regex_replace( *in, std::regex(pattern), replacement );
 }
 
-std::vector<std::string> split(const std::string& str, const std::string& delim)
+static std::vector<std::string> split(const std::string& str, const std::string& delim)
 {
     std::vector<std::string> tokens;
     size_t prev = 0, pos = 0;
@@ -395,25 +424,58 @@ static std::string get_name(const Symbolic& symb){
     return name;
 }
 
+static std::ostream &operator<<(std::ostream &os, std::vector<std::vector<double>> const &matrix) {
+    std::cout << "[\n";
+    for (auto x : matrix) {
+        std::cout << "\t[";
+        for (auto y : x) {
+            std::cout << " " << y;
+        }
+        std::cout << " ]\n";
+    }
+    std::cout << "]\n";
+}
 
+static std::vector<std::vector<double>>
+multiply_transforms(const std::vector<std::vector<double>>& T_a, const std::vector<std::vector<double>>& T_b) {
+    if (T_a.size() != 4 || T_b.size() != 4) {
+        throw length_error("Transforms must be 4x4");
+    }
+    std::vector<std::vector<double>> retval { {0,0,0,0},
+                                              {0,0,0,0},
+                                              {0,0,0,0},
+                                              {0,0,0,0} };
+
+    for (int c = 0; c < 4; c++) {
+        for (int r = 0; r < 4; r++) {
+            for (int i = 0; i < 4; i++) {
+                retval[r][c] += T_a[r][i] * T_b[i][c];
+            }
+        }
+    }
+    return retval;
+}
 
 class Arm {
 public:
     Symbolic m_forward_kinematics;
     std::vector<Symbolic> m_differential_kinematics;
     std::vector<Symbolic> m_actuated_joints;
+    std::vector<Transform> m_transforms;
 
-    Arm(std::vector<Transform> transforms);
+    Arm(const std::vector<Transform>& transforms);
     ~Arm();
     void export_expressions();
+    std::vector<std::vector<std::vector<double>>> get_positions(std::vector<double> joints);
 };
 
-Arm::Arm(std::vector<Transform> transforms){
+Arm::Arm(const std::vector<Transform>& transforms){
+    m_transforms = transforms;
+
     std::cout << "Generating kinematic chain ... " << std::flush;
     bool first = true;
     for (auto T : transforms) {
-        if (T.m_joint_type == REVOLUTE ||
-            T.m_joint_type == PRISMATIC){
+        if (T.is_actuated()){
             m_actuated_joints.push_back(T.get_actuated_joint());
         }
 
@@ -459,9 +521,13 @@ void Arm::export_expressions(){
     for (auto joint : m_actuated_joints) {
         std::string name = get_name(joint);
 
+        replace(&kin_str, "e\\+", "P");
+        replace(&kin_str, "e\\-", "N");
         replace(&kin_str, "sin\\("+name+"\\)", "s_"+name);
         replace(&kin_str, "cos\\("+name+"\\)", "c_"+name);
         for (int index = 0; index < m_actuated_joints.size(); index++) {
+            replace(&dif_str[index], "e\\+", "P");
+            replace(&dif_str[index], "e\\-", "N");
             replace(&dif_str[index], "sin\\("+name+"\\)", "s_"+name);
             replace(&dif_str[index], "cos\\("+name+"\\)", "c_"+name);
         }
@@ -477,6 +543,7 @@ void Arm::export_expressions(){
 
     std::vector<std::string> expressions = split (kin_str, " ");
     std::set<std::string> new_variables;
+
     for (int expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
         // Simplify the kinematics expressions
         ExpressionTree tree (expressions[expr_idx]);
@@ -485,6 +552,8 @@ void Arm::export_expressions(){
         stream.str(std::string());
         stream << tree;
         expressions[expr_idx] = stream.str();
+        replace(&expressions[expr_idx], "P", "e+");
+        replace(&expressions[expr_idx], "N", "e-");
     }
 
     outfile << "static std::vector<double> forward_kinematics(";
@@ -519,12 +588,11 @@ void Arm::export_expressions(){
             ExpressionTree tree (expressions[expr_idx]);
             auto variables = tree.simplify();
             new_variables.insert(variables.begin(), variables.end());
-
-            //std::cout << " TREE : \n" << expressions[expr_idx] << "\n" << tree;
-
             stream.str(std::string());
             stream << tree;
             expressions[expr_idx] = stream.str();
+            replace(&expressions[expr_idx], "P", "e+");
+            replace(&expressions[expr_idx], "N", "e-");
         }
 
         outfile << "static std::vector<double> differential_kinematics_d" << joint_name << "(";
@@ -568,19 +636,146 @@ void Arm::export_expressions(){
     std::cout << "Done\n" << std::flush;
 }
 
+std::vector<std::vector<std::vector<double>>>
+Arm::get_positions(std::vector<double> joints) {
+    std::vector<std::vector<std::vector<double>>> retval;
+    int joint_index = 0;
+
+    std::vector<std::vector<double>> T_prev;
+    for (auto T : m_transforms) {
+        if (T_prev.size() == 0) {
+            T_prev = T.evaluate(joints[joint_index]);
+        } else {
+            T_prev = multiply_transforms(T_prev, T.evaluate(joints[joint_index]));
+        }
+        //std::cout << "PREV: " << T_prev << "\n";
+        //std::cout << "NEXT: " << T.evaluate(joints[joint_index]) << "\n";
+        if (T.is_actuated()) {
+            joint_index++;
+        }
+
+
+        retval.push_back(T_prev);
+    }
+    return retval;
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 
 int main (int argc, char* argv[]) {
-    Transform T1(1,1,1,1,REVOLUTE,1);
-    Transform T2(1,1,1,1,REVOLUTE,2);
-    Transform T3(1,1,1,1,REVOLUTE,3);
+    Transform ROT(0,0,0,0,REVOLUTE,0);
+    Transform T1(0,1,0,1.57079,REVOLUTE,1);
+    Transform T2(0,1,0,1.57079,REVOLUTE,2);
+    Transform T3(0,1,0,1.57079,REVOLUTE,3);
     Transform T4(1,1,1,1,REVOLUTE,4);
     Transform T5(1,1,1,1,REVOLUTE,5);
     Transform T6(1,1,1,1,REVOLUTE,6);
-    std::vector<Transform> transforms = {T1, T2, T3, T4, T5, T6};
-
+    std::vector<Transform> transforms = {ROT, T1, T2, T3};
 
     Arm arm(transforms);
+
+    std::vector<double> joints {0.0,1.0,1.0,1.0};
+
+    std::vector<std::vector<double>> Tx { {1, 0, 0, 0.2},
+                                          {0, 1, 0, 0},
+                                          {0, 0, 1, 0},
+                                          {0, 0, 0, 1} };
+    std::vector<std::vector<double>> Ty { {1, 0, 0, 0},
+                                          {0, 1, 0, 0.2},
+                                          {0, 0, 1, 0},
+                                          {0, 0, 0, 1} };
+    std::vector<std::vector<double>> Tz { {1, 0, 0, 0},
+                                          {0, 1, 0, 0},
+                                          {0, 0, 1, 0.2},
+                                          {0, 0, 0, 1} };
+    if (SDL_Init(SDL_INIT_VIDEO) == 0) {
+        SDL_Window* window = NULL;
+        SDL_Renderer* renderer = NULL;
+
+        if (SDL_CreateWindowAndRenderer(1000, 600, 0, &window, &renderer) == 0) {
+            SDL_bool done = SDL_FALSE;
+
+            while (!done) {
+                SDL_Event event;
+
+                auto positions = arm.get_positions(joints);
+
+                joints[0] += 0.00;
+                joints[1] += 0.005;
+                joints[2] += 0.005;
+                joints[3] += 0.005;
+
+                // BACKGROUND
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+                SDL_RenderClear(renderer);
+
+                double center_x = 250;
+                double center_y = 300;
+                double x0 = center_x, y0 = center_y,x1,y1;
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+                for (const auto& p : positions) {
+                    x1 = -p[0][3]*75 + center_x;
+                    y1 = -p[2][3]*75 + center_y;
+                    SDL_RenderDrawLine(renderer, x0, y0, x1, y1);
+                    x0 = x1;
+                    y0 = y1;
+
+                    auto Px = multiply_transforms(p, Tx);
+                    auto Py = multiply_transforms(p, Ty);
+                    auto Pz = multiply_transforms(p, Tz);
+                    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawLine(renderer, x0, y0, -Px[0][3]*75 + center_x, -Px[2][3]*75 + center_y);
+                    SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawLine(renderer, x0, y0, -Py[0][3]*75 + center_x, -Py[2][3]*75 + center_y);
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 255, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawLine(renderer, x0, y0, -Pz[0][3]*75 + center_x, -Pz[2][3]*75 + center_y);
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+                }
+
+                center_x = 750;
+                center_y = 300;
+                x0 = center_x; y0 = center_y;
+                for (const auto& p : positions) {
+                    x1 = -p[0][3]*75 + center_x;
+                    y1 = -p[1][3]*75 + center_y;
+                    SDL_RenderDrawLine(renderer, x0, y0, x1, y1);
+                    x0 = x1;
+                    y0 = y1;
+
+                    auto Px = multiply_transforms(p, Tx);
+                    auto Py = multiply_transforms(p, Ty);
+                    auto Pz = multiply_transforms(p, Tz);
+                    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawLine(renderer, x0, y0, -Px[0][3]*75 + center_x, -Px[1][3]*75 + center_y);
+                    SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawLine(renderer, x0, y0, -Py[0][3]*75 + center_x, -Py[1][3]*75 + center_y);
+                    SDL_SetRenderDrawColor(renderer, 0, 0, 255, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawLine(renderer, x0, y0, -Pz[0][3]*75 + center_x, -Pz[1][3]*75 + center_y);
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+                }
+
+
+
+                SDL_RenderPresent(renderer);
+
+                while (SDL_PollEvent(&event)) {
+                    if (event.type == SDL_QUIT) {
+                        done = SDL_TRUE;
+                    }
+                }
+            }
+        }
+
+        if (renderer) {
+            SDL_DestroyRenderer(renderer);
+        }
+        if (window) {
+            SDL_DestroyWindow(window);
+        }
+    }
+    SDL_Quit();
+
     arm.export_expressions();
     return 0;
 }
