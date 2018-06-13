@@ -24,7 +24,7 @@ $(PROG):
 	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(SRC) $(SDL) -o $(PROG)
 
 debug:
-	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(DEBUG_FLAGS) $(SRC) -o $(PROG)
+	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(DEBUG_FLAGS) $(SRC) $(SDL) -o $(PROG)
 
 test:
 	g++-4.9 -O2 $(CPP_FLAGS) out.cpp -o test
