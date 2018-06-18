@@ -3,7 +3,7 @@ CPP_FLAGS = -std=c++11
 DEBUG_FLAGS += -g -O0
 PROG = robotics
 
-SRC = robotics.cpp 
+SRC = example.cpp
 
 INC = -I./symboliccpp/headers/
 
