@@ -54,3 +54,12 @@ This is intended to assist in specifying the transforms that compose the robot g
 ![](https://github.com/sjsimps/Robotics-Tools/blob/master/example_render.gif)
 
 This shows a sample rendering of the kinematic chain specified in example.cpp
+
+### Dependencies
+
+[Symbolic C++](http://issc.uj.ac.za/symbolic/symbolic.html) is copied directly into this repository.
+I have not modified nor contributed to the library, therefore all credit for Symbolic C++ goes to its developers.
+Symbolic C++ is used to symbolically compute the differential and forward kinematics prior to compilation.
+
+[SDL 2.0](https://wiki.libsdl.org/Installation) is required to render the arm model visually.
+
