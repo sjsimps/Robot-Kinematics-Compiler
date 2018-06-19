@@ -15,12 +15,35 @@
 #include "transform.h"
 #include "expressiontree.h"
 
+/////////////////////////////////////////////////
+
+class Arm {
+public:
+    Symbolic m_forward_kinematics;
+    std::vector<Symbolic> m_differential_kinematics;
+    std::vector<Symbolic> m_actuated_joints;
+    std::vector<Transform> m_transforms;
+
+    Arm(const std::vector<Transform>& transforms);
+
+    ~Arm();
+
+    // Export forward & differential kinematics to file
+    void export_expressions(std::string filename);
+
+    // Get each frame transform of the arm given a set of joint positions
+    std::vector<std::vector<std::vector<double>>>
+    get_positions(std::vector<double> joints);
+};
+
+/////////////////////////////////////////////////
+// UTILITY
+
 static void replace(std::string* in, std::string pattern, std::string replacement){
     *in = std::regex_replace( *in, std::regex(pattern), replacement );
 }
 
-static std::vector<std::string> split(const std::string& str, const std::string& delim)
-{
+static std::vector<std::string> split(const std::string& str, const std::string& delim) {
     std::vector<std::string> tokens;
     size_t prev = 0, pos = 0;
     do {
@@ -75,18 +98,8 @@ multiply_transforms(const std::vector<std::vector<double>>& T_a, const std::vect
     return retval;
 }
 
-class Arm {
-public:
-    Symbolic m_forward_kinematics;
-    std::vector<Symbolic> m_differential_kinematics;
-    std::vector<Symbolic> m_actuated_joints;
-    std::vector<Transform> m_transforms;
-
-    Arm(const std::vector<Transform>& transforms);
-    ~Arm();
-    void export_expressions();
-    std::vector<std::vector<std::vector<double>>> get_positions(std::vector<double> joints);
-};
+/////////////////////////////////////////////////
+// ARM IMPLEMENTATION
 
 Arm::Arm(const std::vector<Transform>& transforms){
     m_transforms = transforms;
@@ -100,7 +113,7 @@ Arm::Arm(const std::vector<Transform>& transforms){
 Arm::~Arm(){
 }
 
-void Arm::export_expressions(){
+void Arm::export_expressions(std::string filename){
 
     ////////////
     // Generating kinematic chain
@@ -131,7 +144,7 @@ void Arm::export_expressions(){
     std::string kin_str;
     std::vector<std::string> dif_str;
     std::ostringstream stream;
-    std::ofstream outfile ("out.cpp", std::ofstream::binary);
+    std::ofstream outfile (filename, std::ofstream::binary);
     stream << m_forward_kinematics;
     kin_str = stream.str();
 
@@ -287,4 +300,4 @@ Arm::get_positions(std::vector<double> joints) {
 }
 
 
-#endif
+#endif // ARM_H

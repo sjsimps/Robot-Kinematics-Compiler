@@ -6,25 +6,27 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <regex>
-#include <algorithm>
-#include <set>
 #include "symbolicc++.h"
 
 #include <SDL2/SDL.h>
 
-std::vector<std::vector<double>> Tx { {1, 0, 0, 0.2},
-                                      {0, 1, 0, 0},
-                                      {0, 0, 1, 0},
-                                      {0, 0, 0, 1} };
-std::vector<std::vector<double>> Ty { {1, 0, 0, 0},
-                                      {0, 1, 0, 0.2},
-                                      {0, 0, 1, 0},
-                                      {0, 0, 0, 1} };
-std::vector<std::vector<double>> Tz { {1, 0, 0, 0},
-                                      {0, 1, 0, 0},
-                                      {0, 0, 1, 0.2},
-                                      {0, 0, 0, 1} };
+static const std::vector<std::vector<double>>
+Tx { {1, 0, 0, 0.2},
+     {0, 1, 0, 0},
+     {0, 0, 1, 0},
+     {0, 0, 0, 1} };
+
+static const std::vector<std::vector<double>>
+Ty { {1, 0, 0, 0},
+     {0, 1, 0, 0.2},
+     {0, 0, 1, 0},
+     {0, 0, 0, 1} };
+
+static const std::vector<std::vector<double>>
+Tz { {1, 0, 0, 0},
+     {0, 1, 0, 0},
+     {0, 0, 1, 0.2},
+     {0, 0, 0, 1} };
 
 static void render_link(SDL_Renderer* renderer,
                         double* x0p, double* y0p, double* z0p,

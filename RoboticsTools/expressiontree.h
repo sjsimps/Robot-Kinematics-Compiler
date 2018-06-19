@@ -11,6 +11,8 @@
 #include <set>
 #include "symbolicc++.h"
 
+/////////////////////////////////////////////////
+
 struct MultiplyExpression {
     bool positive;
     std::vector<std::string> elements;
@@ -27,6 +29,8 @@ public:
 
     SumExpression m_expr;
 };
+
+/////////////////////////////////////////////////
 
 std::ostream &operator<<(std::ostream &os, MultiplyExpression const &mult_exp) {
     if (mult_exp.elements.size() == 0) {

@@ -7,7 +7,7 @@ SRC = example.cpp
 
 INC = -I./symboliccpp/headers/
 
-SDL =-L/usr/local/lib -lSDL2 -lSDL2_image -lpulse-simple -lpulse -lpthread
+SDL =-L/usr/local/lib -lSDL2 -lSDL2_image
 
 .PHONY: all
 all: $(PROG)
