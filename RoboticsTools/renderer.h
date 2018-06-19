@@ -31,9 +31,9 @@ Tz { {1, 0, 0, 0},
 static void render_grid(SDL_Renderer* renderer,
                         double center_x, double center_y) {
     SDL_SetRenderDrawColor(renderer, 70,70,70, SDL_ALPHA_OPAQUE);
-    double width = 1300/2;
+    double width = 1300;
     double height = -200;
-    center_y += height/4;
+    center_y += height;
 
     for (double scale = 1.0; scale <= 2.01; scale += 0.1) {
         SDL_RenderDrawLine(renderer,
@@ -42,7 +42,7 @@ static void render_grid(SDL_Renderer* renderer,
                            (width*0.45)/scale + center_x,
                            -height/scale + center_y);
     }
-    for (double w = -width*0.45; w <= width*0.45; w+=width*0.09) {
+    for (double w = -width*0.45; w <= width*0.45; w+=width*0.05) {
         SDL_RenderDrawLine(renderer,
                            w + center_x,
                            -height + center_y,
@@ -56,6 +56,7 @@ static void render_link(SDL_Renderer* renderer,
                         double center_x, double center_y,
                         const std::vector<std::vector<double>>& p) {
 
+    center_y -= 268;
     double x0 = *x0p;
     double y0 = *y0p+200;
     double z0 = *z0p;
@@ -90,17 +91,17 @@ static void render_link(SDL_Renderer* renderer,
     SDL_SetRenderDrawColor(renderer, shade, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer,
                        x1/scale + center_x, y1/scale + center_y,
-                       -Px[0][3]*100/scale + center_x, (-Px[2][3]*100+200)/scale + center_y);
+                       -Px[0][3]*100/(-Px[1][3]*0.1+1.0) + center_x, (-Px[2][3]*100+200)/(-Px[1][3]*0.1+1.0) + center_y);
     SDL_SetRenderDrawColor(renderer, 0, shade, 0, SDL_ALPHA_OPAQUE);
 
     SDL_RenderDrawLine(renderer,
                        x1/scale + center_x, y1/scale + center_y,
-                       -Py[0][3]*100/scale + center_x, (-Py[2][3]*100+200)/scale + center_y);
+                       -Py[0][3]*100/(-Py[1][3]*0.1+1.0) + center_x, (-Py[2][3]*100+200)/(-Py[1][3]*0.1+1.0) + center_y);
 
     SDL_SetRenderDrawColor(renderer, 0, 0, shade, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer,
                        x1/scale + center_x, y1/scale + center_y,
-                       -Pz[0][3]*100/scale + center_x, (-Pz[2][3]*100+200)/scale + center_y);
+                       -Pz[0][3]*100/(-Pz[1][3]*0.1+1.0) + center_x, (-Pz[2][3]*100+200)/(-Pz[1][3]*0.1+1.0) + center_y);
 
     *x0p = x1;
     *y0p = y1-200;
@@ -130,22 +131,13 @@ static void render_arm(Arm* arm) {
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
                 SDL_RenderClear(renderer);
 
-                double center_x = 1300/4;
-                double center_y = 305;
+                double center_x = 1300/2;
+                double center_y = 2*750/3;
                 
                 render_grid(renderer, center_x, center_y);
 
-                center_y = 750/4;
                 double x0=0, y0=0, z0=0;
                 for (const auto& p : positions) {
-                    render_link(renderer, &x0, &y0, &z0, center_x, center_y, p);
-                }
-
-                center_x = 1300*3/4;
-                center_y = 750/2;
-                x0=0, y0=0, z0=0;
-                for (auto p : positions) {
-                    std::swap(p[1],p[2]);
                     render_link(renderer, &x0, &y0, &z0, center_x, center_y, p);
                 }
 

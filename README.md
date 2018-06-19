@@ -46,6 +46,12 @@ See **example.cpp** for a sample of how to create a robot manipulator.
 
 This toolkit provides support for realizing a robot's **forward kinematics** and **differential kinematics**.
 
+##### Performance
+
+In tests on my machine, the compiled forward kinematics calculations execute **359.3x faster** than forward kinematics applied by sequentially multiplying frame transforms for a simple 3-link RRR manipulator.
+This test was executed by running 100k forwards kinematics requests using both methods.
+The compiled method calculated all 100k requests in 0.06806 seconds, whereas the frame transform approach calculated all requests in 24.4526 seconds.
+
 ### Robot Renderer
 
 A simple renderer is used to show a visual representation of the kinematic chain.
