@@ -57,7 +57,7 @@ The compiled method calculated all 100k requests in 0.06806 seconds, whereas the
 A simple renderer is used to show a visual representation of the kinematic chain.
 This is intended to assist in specifying the transforms that compose the robot geometry.
 
-![](https://github.com/sjsimps/Robotics-Tools/blob/master/example_render.webm)
+![](https://github.com/sjsimps/Robotics-Tools/blob/master/example_render.gif)
 
 This shows a sample rendering of a robot with 6 revolute joints, each joint rotating at constant velocity in the same direction.
 
