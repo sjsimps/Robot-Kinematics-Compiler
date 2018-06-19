@@ -51,6 +51,6 @@ This toolkit provides support for realizing a robot's **forward kinematics** and
 A simple renderer is used to show a visual representation of the kinematic chain.
 This is intended to assist in specifying the transforms that compose the robot geometry.
 
-![](https://github.com/sjsimps/Robotics-Tools/blob/master/example_render.png)
+![](https://github.com/sjsimps/Robotics-Tools/blob/master/example_render.gif)
 
 This shows a sample rendering of the kinematic chain specified in example.cpp
