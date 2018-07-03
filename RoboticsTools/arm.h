@@ -67,15 +67,15 @@ static std::string get_name(const Symbolic& symb){
 }
 
 static std::ostream &operator<<(std::ostream &os, std::vector<std::vector<double>> const &matrix) {
-    std::cout << "[\n";
+    os << "[\n";
     for (auto x : matrix) {
-        std::cout << "\t[";
+        os << "\t[";
         for (auto y : x) {
-            std::cout << " " << y;
+            os << " " << y;
         }
-        std::cout << " ]\n";
+        os << " ]\n";
     }
-    std::cout << "]\n";
+    os << "]\n";
 }
 
 static std::vector<std::vector<double>>
@@ -286,15 +286,15 @@ void Arm::export_expressions(std::string filename){
     ////////////
     // Test output:
     outfile << "static std::ostream &operator<<(std::ostream &os, std::vector<std::vector<double>> const &matrix) {\n"
-            << "    std::cout << \"[\\n\";\n"
+            << "    os << \"[\\n\";\n"
             << "    for (auto x : matrix) {\n"
-            << "        std::cout << \"\t[\";\n"
+            << "        os << \"\t[\";\n"
             << "        for (auto y : x) {\n"
-            << "            std::cout << \" \" << y;\n"
+            << "            os << \" \" << y;\n"
             << "        }\n"
-            << "        std::cout << \" ]\\n\";\n"
+            << "        os << \" ]\\n\";\n"
             << "    }\n"
-            << "    std::cout << \"]\\n\";\n"
+            << "    os << \"]\\n\";\n"
             << "}\n";
 
 
@@ -305,7 +305,7 @@ void Arm::export_expressions(std::string filename){
         outfile << "1.0" << ((joint == m_actuated_joints.end()-1) ? ");\n" : ", ");
     }
     outfile << "    timer = clock() - timer;\n"
-            << "    std::cout << result << \"\\n\";"
+            << "    std::cout << result;\n"
             << "    std::cout << \"Forward Kinematics Computation Time : \" << ((float)timer)/CLOCKS_PER_SEC << \" seconds\\n\";\n"
             << "}\n";
 
