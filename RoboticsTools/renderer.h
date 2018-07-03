@@ -10,7 +10,7 @@
 
 #include <SDL2/SDL.h>
 
-static double s_arm_scaling_factor;
+static double s_arm_scaling, s_z_scaling;
 
 static const std::vector<std::vector<double>>
 Tx { {1, 0, 0, 0.2},
@@ -63,9 +63,9 @@ static void render_link(SDL_Renderer* renderer,
     double y0 = *y0p+200;
     double z0 = *z0p;
 
-    double x1 = -p[0][3]*s_arm_scaling_factor;
-    double y1 = -p[2][3]*s_arm_scaling_factor+200;
-    double z1 = -p[1][3]*s_arm_scaling_factor*0.001;
+    double x1 = -p[0][3]*s_arm_scaling;
+    double y1 = -p[2][3]*s_arm_scaling+200;
+    double z1 = -p[1][3]*s_z_scaling;
 
     double delta_x = (x1-x0)/10.0;
     double delta_y = (y1-y0)/10.0;
@@ -93,20 +93,20 @@ static void render_link(SDL_Renderer* renderer,
     SDL_SetRenderDrawColor(renderer, shade, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer,
                        x1/scale + center_x, y1/scale + center_y,
-                       -Px[0][3]*s_arm_scaling_factor/(-Px[1][3]*s_arm_scaling_factor*0.001+1.0) + center_x,
-                       (-Px[2][3]*s_arm_scaling_factor+200)/(-Px[1][3]*s_arm_scaling_factor*0.001+1.0) + center_y);
+                       -Px[0][3]*s_arm_scaling/(-Px[1][3]*s_z_scaling+1.0) + center_x,
+                       (-Px[2][3]*s_arm_scaling+200)/(-Px[1][3]*s_z_scaling+1.0) + center_y);
     SDL_SetRenderDrawColor(renderer, 0, shade, 0, SDL_ALPHA_OPAQUE);
 
     SDL_RenderDrawLine(renderer,
                        x1/scale + center_x, y1/scale + center_y,
-                       -Py[0][3]*s_arm_scaling_factor/(-Py[1][3]*s_arm_scaling_factor*0.001+1.0) + center_x,
-                       (-Py[2][3]*s_arm_scaling_factor+200)/(-Py[1][3]*s_arm_scaling_factor*0.001+1.0) + center_y);
+                       -Py[0][3]*s_arm_scaling/(-Py[1][3]*s_z_scaling+1.0) + center_x,
+                       (-Py[2][3]*s_arm_scaling+200)/(-Py[1][3]*s_z_scaling+1.0) + center_y);
 
     SDL_SetRenderDrawColor(renderer, 0, 0, shade, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer,
                        x1/scale + center_x, y1/scale + center_y,
-                       -Pz[0][3]*s_arm_scaling_factor/(-Pz[1][3]*s_arm_scaling_factor*0.001+1.0) + center_x,
-                       (-Pz[2][3]*s_arm_scaling_factor+200)/(-Pz[1][3]*s_arm_scaling_factor*0.001+1.0) + center_y);
+                       -Pz[0][3]*s_arm_scaling/(-Pz[1][3]*s_z_scaling+1.0) + center_x,
+                       (-Pz[2][3]*s_arm_scaling+200)/(-Pz[1][3]*s_z_scaling+1.0) + center_y);
 
     *x0p = x1;
     *y0p = y1-200;
@@ -116,14 +116,16 @@ static void render_link(SDL_Renderer* renderer,
 static void render_arm(Arm* arm) {
    
    
-    s_arm_scaling_factor = 0;
+    s_arm_scaling = 0;
+    s_z_scaling = 0;
     std::vector<double> joints (arm->m_actuated_joints.size(),0);
     double arm_link_lengths;
     auto arm_positions = arm->get_positions(joints);
     for (auto p : arm_positions) {
         arm_link_lengths += sqrt( p[0][3]*p[0][3] + p[2][3]*p[2][3] + p[2][3]*p[2][3] ) ;
     }
-    s_arm_scaling_factor = 500.0/arm_link_lengths;
+    s_arm_scaling = 450.0/arm_link_lengths;
+    s_z_scaling = s_arm_scaling*0.001;
 
     if (SDL_Init(SDL_INIT_VIDEO) == 0) {
         SDL_Window* window = NULL;
@@ -139,7 +141,7 @@ static void render_arm(Arm* arm) {
                 auto positions = arm->get_positions(joints);
 
                 for (int j = 0; j < joints.size(); j++) {
-                    //joints[j] += 0.005;
+                    joints[j] += 0.005;
                 }
 
                 // BACKGROUND

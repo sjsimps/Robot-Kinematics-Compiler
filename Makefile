@@ -2,6 +2,7 @@
 CPP_FLAGS = -std=c++11
 DEBUG_FLAGS += -g -O0
 PROG = robotics
+TEST = robotics_test
 
 SRC = example.cpp
 
@@ -19,6 +20,7 @@ debug:
 .PHONY: clean
 clean:
 	rm $(PROG)
+	rm $(TEST)
 
 $(PROG):
 	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(SRC) $(SDL) -o $(PROG)
@@ -27,7 +29,4 @@ debug:
 	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(DEBUG_FLAGS) $(SRC) $(SDL) -o $(PROG)
 
 test:
-	g++-4.9 -O2 $(CPP_FLAGS) example_out.cpp -o test
-
-renderer:
-	g++-4.9 -O2 $(CPP_FLAGS) line_renderer.cpp $(SDL) -o line
+	g++-4.9 -O2 $(CPP_FLAGS) example_out.cpp -o $(TEST)

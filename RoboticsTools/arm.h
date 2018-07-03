@@ -196,7 +196,7 @@ void Arm::export_expressions(std::string filename){
         replace(&expressions[expr_idx], "N", "e-");
     }
 
-    outfile << "static std::vector<double> forward_kinematics(";
+    outfile << "static std::vector<std::vector<double>> forward_kinematics(";
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
         std::string name = get_name(*joint);
         outfile << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
@@ -209,13 +209,24 @@ void Arm::export_expressions(std::string filename){
     for (auto var : new_variables) {
         outfile << "    " << var;
     }
-    outfile << "    std::vector<double> kinematics;\n";
-    outfile << "    double result;\n";
-    for (auto expr : expressions) {
-        outfile << "    result = " << expr << ";\n";
-        outfile << "    kinematics.push_back(result);\n";
-    }
-    outfile << "    return kinematics;\n"
+    outfile << "    double R11 = " << expressions[0] << ";\n"
+            << "    double R12 = " << expressions[1] << ";\n"
+            << "    double R13 = " << expressions[2] << ";\n"
+            << "    double X   = " << expressions[3] << ";\n"
+            << "    double R21 = " << expressions[4] << ";\n"
+            << "    double R22 = " << expressions[5] << ";\n"
+            << "    double R23 = " << expressions[6] << ";\n"
+            << "    double Y   = " << expressions[7] << ";\n"
+            << "    double R31 = " << expressions[8] << ";\n"
+            << "    double R32 = " << expressions[9] << ";\n"
+            << "    double R33 = " << expressions[10] << ";\n"
+            << "    double Z   = " << expressions[11] << ";\n"
+            << "    std::vector<std::vector<double>> kinematics\n"
+            << "        { {R11, R12, R13, X},\n"
+            << "          {R21, R22, R23, Y},\n"
+            << "          {R31, R32, R33, Z},\n"
+            << "          {0, 0, 0, 1} };\n"
+            << "    return kinematics;\n"
             << "}\n";
 
     ////////////
@@ -236,7 +247,7 @@ void Arm::export_expressions(std::string filename){
             replace(&expressions[expr_idx], "N", "e-");
         }
 
-        outfile << "static std::vector<double> differential_kinematics_d" << joint_name << "(";
+        outfile << "static std::vector<std::vector<double>> differential_kinematics_d" << joint_name << "(";
         for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
             std::string name = get_name(*joint);
             outfile << "double " << name << ((joint == m_actuated_joints.end()-1) ? ") {\n" : ", ");
@@ -249,27 +260,52 @@ void Arm::export_expressions(std::string filename){
         for (auto var : new_variables) {
             outfile << "    " << var;
         }
-        outfile << "    std::vector<double> kinematics;\n";
-        outfile << "    double result;\n";
-        for (auto expr : expressions) {
-            outfile << "    result = " << expr << ";\n";
-            outfile << "    kinematics.push_back(result);\n";
-        }
-        outfile << "    return kinematics;\n"
+
+        outfile << "    double R11 = " << expressions[0] << ";\n"
+                << "    double R12 = " << expressions[1] << ";\n"
+                << "    double R13 = " << expressions[2] << ";\n"
+                << "    double X   = " << expressions[3] << ";\n"
+                << "    double R21 = " << expressions[4] << ";\n"
+                << "    double R22 = " << expressions[5] << ";\n"
+                << "    double R23 = " << expressions[6] << ";\n"
+                << "    double Y   = " << expressions[7] << ";\n"
+                << "    double R31 = " << expressions[8] << ";\n"
+                << "    double R32 = " << expressions[9] << ";\n"
+                << "    double R33 = " << expressions[10] << ";\n"
+                << "    double Z   = " << expressions[11] << ";\n"
+                << "    std::vector<std::vector<double>> kinematics\n"
+                << "        { {R11, R12, R13, X},\n"
+                << "          {R21, R22, R23, Y},\n"
+                << "          {R31, R32, R33, Z},\n"
+                << "          {0, 0, 0, 1} };\n"
+                << "    return kinematics;\n"
                 << "}\n";
     }
 
 
     ////////////
     // Test output:
+    outfile << "static std::ostream &operator<<(std::ostream &os, std::vector<std::vector<double>> const &matrix) {\n"
+            << "    std::cout << \"[\\n\";\n"
+            << "    for (auto x : matrix) {\n"
+            << "        std::cout << \"\t[\";\n"
+            << "        for (auto y : x) {\n"
+            << "            std::cout << \" \" << y;\n"
+            << "        }\n"
+            << "        std::cout << \" ]\\n\";\n"
+            << "    }\n"
+            << "    std::cout << \"]\\n\";\n"
+            << "}\n";
+
+
     outfile << "int main (int argc, char* argv[]) {\n"
             << "    clock_t timer = clock();\n"
-            << "    std::vector<double> result = forward_kinematics(";
+            << "    auto result = forward_kinematics(";
     for (auto joint = m_actuated_joints.begin(); joint != m_actuated_joints.end(); joint++) {
         outfile << "1.0" << ((joint == m_actuated_joints.end()-1) ? ");\n" : ", ");
     }
-    outfile << "    for (auto r : result) { std::cout << r << \"\\n\"; }\n"
-            << "    timer = clock() - timer;\n"
+    outfile << "    timer = clock() - timer;\n"
+            << "    std::cout << result << \"\\n\";"
             << "    std::cout << \"Forward Kinematics Computation Time : \" << ((float)timer)/CLOCKS_PER_SEC << \" seconds\\n\";\n"
             << "}\n";
 
