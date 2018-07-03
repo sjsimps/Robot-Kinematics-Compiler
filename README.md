@@ -42,8 +42,8 @@ Note that the right hand rule for specifying axis orientation is always used.
 ```
 
 A robotic manipulator is specified by creating a list of transforms, thus creating a kinematic chain.
-See **example.cpp** for a sample of how to create a robot manipulator.
-See **example_out.cpp** to view the output of the compilation executed in the example program.
+See [example.cpp](https://github.com/sjsimps/Robotics-Tools/blob/master/example.cpp) for a sample of how to create a robot manipulator.
+See [example_out.cpp](https://github.com/sjsimps/Robotics-Tools/blob/master/example_out.cpp) to view the output of the compilation executed in the example program.
 
 This toolkit provides support for realizing a robot's **forward kinematics** and **differential kinematics**.
 
