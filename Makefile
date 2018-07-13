@@ -29,4 +29,4 @@ debug:
 	g++-4.9 -O2 $(INC) $(CPP_FLAGS) $(DEBUG_FLAGS) $(SRC) $(SDL) -o $(PROG)
 
 test:
-	g++-4.9 -O2 $(CPP_FLAGS) example_out.cpp -o $(TEST)
+	g++ -O2 -I/usr/include/eigen3/ $(CPP_FLAGS) example_out.cpp -o $(TEST)
